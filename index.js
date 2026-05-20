@@ -22,17 +22,17 @@ function setupEventListeners() {
 
     // Upload de arquivo
     fileInput.addEventListener('change', handleFileSelect);
-    
+
     // Drag and drop
     uploadArea.addEventListener('dragover', (e) => {
         e.preventDefault();
         uploadArea.classList.add('dragover');
     });
-    
+
     uploadArea.addEventListener('dragleave', () => {
         uploadArea.classList.remove('dragover');
     });
-    
+
     uploadArea.addEventListener('drop', (e) => {
         e.preventDefault();
         uploadArea.classList.remove('dragover');
@@ -45,11 +45,17 @@ function setupEventListeners() {
     // Filtros
     applyFiltersBtn.addEventListener('click', applyFilters);
     resetFiltersBtn.addEventListener('click', resetFilters);
-    
+
     // Day Offs Button
     const dayOffsBtn = document.getElementById('dayOffsBtn');
     if (dayOffsBtn) {
         dayOffsBtn.addEventListener('click', openDayOffsModal);
+    }
+
+    // Copy Projects Button
+    const copyProjectsBtn = document.getElementById('copyProjectsBtn');
+    if (copyProjectsBtn) {
+        copyProjectsBtn.addEventListener('click', copyProjectsToClipboard);
     }
 }
 
@@ -752,7 +758,7 @@ function updateProjectTable() {
 // Atualizar tabela de atividades
 function updateActivityTable() {
     const activityData = groupByActivity();
-    
+
     // Converter para array e ordenar por horas
     const dataArray = Object.entries(activityData).map(([activity, data]) => ({
         activity: activity,
@@ -760,27 +766,27 @@ function updateActivityTable() {
         tasks: data.tasks,
         percentage: data.percentage
     })).sort((a, b) => b.hours - a.hours);
-    
+
     // Destruir tabela anterior se existir
     if (activityTableInstance) {
         activityTableInstance.destroy();
     }
-    
+
     // Criar nova tabela
     activityTableInstance = $('#activityTable').DataTable({
         data: dataArray,
         columns: [
             { data: 'activity', title: 'Atividade' },
-            { 
-                data: 'hours', 
+            {
+                data: 'hours',
                 title: 'Horas Trabalhadas',
                 render: function(data) {
                     return data.toFixed(2) + 'h';
                 }
             },
             { data: 'tasks', title: 'Quantidade de Tasks' },
-            { 
-                data: 'percentage', 
+            {
+                data: 'percentage',
                 title: '% do Total',
                 render: function(data) {
                     return `<span class="badge bg-success">${data}%</span>`;
@@ -792,6 +798,62 @@ function updateActivityTable() {
             url: '//cdn.datatables.net/plug-ins/1.13.7/i18n/pt-BR.json'
         },
         pageLength: 25
+    });
+}
+
+// Gerar texto dos projetos para copiar
+function generateProjectsText() {
+    const selectedMonth = parseInt(document.getElementById('monthSelect').value);
+    const selectedYear = parseInt(document.getElementById('yearSelect').value);
+
+    // Obter projetos únicos do filteredData, sem repetição
+    const projects = new Set();
+    filteredData.forEach(row => {
+        if (row['Area Path']) {
+            projects.add(row['Area Path']);
+        }
+    });
+
+    // Converter para array e ordenar
+    const projectsArray = Array.from(projects).sort();
+
+    // Formatando período
+    const daysInMonth = new Date(selectedYear, selectedMonth, 0).getDate();
+    const startDay = String(1).padStart(2, '0');
+    const endDay = String(daysInMonth).padStart(2, '0');
+    const monthStr = String(selectedMonth).padStart(2, '0');
+
+    const periodText = `${startDay}/${monthStr}/${selectedYear} à ${endDay}/${monthStr}/${selectedYear}`;
+
+    // Montar texto final
+    let text = 'Projeto:\n';
+    projectsArray.forEach(project => {
+        text += project + '\n';
+    });
+    text += `\nPeríodo: ${periodText}`;
+
+    return text;
+}
+
+// Copiar projetos para clipboard
+function copyProjectsToClipboard() {
+    const text = generateProjectsText();
+
+    navigator.clipboard.writeText(text).then(() => {
+        // Feedback visual de sucesso
+        const btn = document.getElementById('copyProjectsBtn');
+        const originalText = btn.innerHTML;
+        btn.innerHTML = '<i class="bi bi-check-circle"></i> Copiado!';
+        btn.classList.remove('btn-outline-primary');
+        btn.classList.add('btn-success');
+
+        setTimeout(() => {
+            btn.innerHTML = originalText;
+            btn.classList.remove('btn-success');
+            btn.classList.add('btn-outline-primary');
+        }, 2000);
+    }).catch(() => {
+        alert('Erro ao copiar para o clipboard');
     });
 }
 
