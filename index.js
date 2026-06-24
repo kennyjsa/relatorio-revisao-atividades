@@ -631,16 +631,13 @@ function updateDailyTable() {
     // Converter para array e ordenar
     const dataArray = Object.entries(dailyData).map(([date, data]) => ({
         date: date,
+        sortDate: toISODate(data.date),
         dayOfWeek: data.dayOfWeek,
         hours: data.hours,
         tasks: data.tasks,
         isWeekend: data.isWeekend,
         isDayOff: data.isDayOff
-    })).sort((a, b) => {
-        const dateA = parseDate(a.date + ' 00:00:00');
-        const dateB = parseDate(b.date + ' 00:00:00');
-        return dateA - dateB;
-    });
+    }));
     
     // Destruir tabela anterior se existir
     if (dailyTableInstance) {
@@ -654,6 +651,12 @@ function updateDailyTable() {
             { 
                 data: 'date', 
                 title: 'Data',
+                render: function(data, type, row) {
+                    if (type === 'sort' || type === 'type') {
+                        return row.sortDate;
+                    }
+                    return data;
+                },
                 createdCell: function(td, cellData, rowData) {
                     if (rowData.isDayOff) {
                         $(td).css('background-color', '#d1ecf1');
