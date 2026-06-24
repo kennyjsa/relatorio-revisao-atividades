@@ -4,11 +4,12 @@ let filteredData = [];
 let dailyTableInstance = null;
 let projectTableInstance = null;
 let activityTableInstance = null;
-let dayOffs = {}; // Day offs por mês/ano: { "2025-10": ["01", "15", "20"] }
+let dayOffs = {}; // Day offs por período: { "2025-09-21_2025-10-20": ["2025-09-25", ...] }
+let periodPicker = null;
 
 // Inicialização
 document.addEventListener('DOMContentLoaded', function() {
-    initializeFilters();
+    initializePeriodPicker();
     setupEventListeners();
     loadDayOffs();
 });
@@ -76,57 +77,134 @@ function saveDayOffs() {
     localStorage.setItem('dayOffs', JSON.stringify(dayOffs));
 }
 
-// Obter chave para o mês/ano
-function getDayOffKey(month, year) {
-    return `${year}-${String(month).padStart(2, '0')}`;
+// Normalizar data para comparação (meia-noite local)
+function normalizeDate(date) {
+    const d = new Date(date);
+    d.setHours(0, 0, 0, 0);
+    return d;
+}
+
+// Data no formato ISO (yyyy-MM-dd) para chaves
+function toISODate(date) {
+    const d = normalizeDate(date);
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
+// Período padrão: ciclo 21 a 20
+function getDefaultPeriod() {
+    const today = normalizeDate(new Date());
+    const day = today.getDate();
+    const month = today.getMonth();
+    const year = today.getFullYear();
+
+    let start;
+    let end;
+
+    if (day >= 21) {
+        start = new Date(year, month, 21);
+        end = new Date(year, month + 1, 20);
+    } else {
+        start = new Date(year, month - 1, 21);
+        end = new Date(year, month, 20);
+    }
+
+    return { start: normalizeDate(start), end: normalizeDate(end) };
+}
+
+function isDateInPeriod(date, start, end) {
+    const d = normalizeDate(date);
+    return d >= start && d <= end;
+}
+
+function getSelectedPeriod() {
+    if (periodPicker && periodPicker.selectedDates.length === 2) {
+        return {
+            start: normalizeDate(periodPicker.selectedDates[0]),
+            end: normalizeDate(periodPicker.selectedDates[1])
+        };
+    }
+    return getDefaultPeriod();
+}
+
+function initializePeriodPicker() {
+    const periodInput = document.getElementById('periodRange');
+    if (!periodInput) return;
+
+    const { start, end } = getDefaultPeriod();
+
+    periodPicker = flatpickr(periodInput, {
+        mode: 'range',
+        dateFormat: 'd/m/Y',
+        locale: 'pt',
+        defaultDate: [start, end],
+        allowInput: false,
+        showMonths: 2
+    });
+}
+
+// Obter chave para o período selecionado
+function getDayOffKey(start, end) {
+    return `${toISODate(start)}_${toISODate(end)}`;
 }
 
 // Verificar se um dia é day off
-function isDayOff(date, month, year) {
-    const key = getDayOffKey(month, year);
+function isDayOff(date) {
+    const { start, end } = getSelectedPeriod();
+    const key = getDayOffKey(start, end);
     if (!dayOffs[key]) return false;
-    
-    const day = String(date.getDate()).padStart(2, '0');
-    return dayOffs[key].includes(day);
+
+    return dayOffs[key].includes(toISODate(date));
+}
+
+// Iterar cada dia de um período
+function eachDayInPeriod(start, end, callback) {
+    const current = normalizeDate(start);
+    const last = normalizeDate(end);
+
+    while (current <= last) {
+        callback(new Date(current));
+        current.setDate(current.getDate() + 1);
+    }
 }
 
 // Abrir modal de seleção de day offs
 function openDayOffsModal() {
-    const selectedMonth = parseInt(document.getElementById('monthSelect').value);
-    const selectedYear = parseInt(document.getElementById('yearSelect').value);
-    const key = getDayOffKey(selectedMonth, selectedYear);
-    
+    const { start, end } = getSelectedPeriod();
+    const key = getDayOffKey(start, end);
+
     if (!dayOffs[key]) {
         dayOffs[key] = [];
     }
-    
-    // Criar lista de dias do mês
-    const daysInMonth = new Date(selectedYear, selectedMonth, 0).getDate();
+
     const dayNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
-    
     let checkboxesHtml = '<div class="row">';
-    
-    for (let day = 1; day <= daysInMonth; day++) {
-        const date = new Date(selectedYear, selectedMonth - 1, day);
+    const daysInPeriod = [];
+
+    eachDayInPeriod(start, end, (date) => {
+        const isoDate = toISODate(date);
+        daysInPeriod.push(isoDate);
         const dayOfWeek = date.getDay();
-        const dayStr = String(day).padStart(2, '0');
-        const isChecked = dayOffs[key].includes(dayStr);
+        const isChecked = dayOffs[key].includes(isoDate);
         const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-        
+
         checkboxesHtml += `
             <div class="col-6 col-md-4 col-lg-3 mb-2">
                 <div class="form-check">
-                    <input class="form-check-input" type="checkbox" id="day-${dayStr}" value="${dayStr}" ${isChecked ? 'checked' : ''}>
-                    <label class="form-check-label" for="day-${dayStr}" style="${isWeekend ? 'color: #6c757d;' : ''}">
-                        ${day} - ${dayNames[dayOfWeek]}
+                    <input class="form-check-input" type="checkbox" id="day-${isoDate}" value="${isoDate}" ${isChecked ? 'checked' : ''}>
+                    <label class="form-check-label" for="day-${isoDate}" style="${isWeekend ? 'color: #6c757d;' : ''}">
+                        ${formatDate(date)} - ${dayNames[dayOfWeek]}
                     </label>
                 </div>
             </div>
         `;
-    }
-    
+    });
+
     checkboxesHtml += '</div>';
-    
+
+    const periodLabel = `${formatDate(start)} a ${formatDate(end)}`;
     // Criar modal
     const modalHtml = `
         <div class="modal fade" id="dayOffsModal" tabindex="-1">
@@ -137,6 +215,7 @@ function openDayOffsModal() {
                         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                     </div>
                     <div class="modal-body">
+                        <p class="text-muted">Período: <strong>${periodLabel}</strong></p>
                         <p class="text-muted">Marque os dias que não devem contar como dias úteis:</p>
                         ${checkboxesHtml}
                     </div>
@@ -165,13 +244,12 @@ function openDayOffsModal() {
     // Evento de salvar
     document.getElementById('saveDayOffsBtn').addEventListener('click', function() {
         const selectedDays = [];
-        for (let day = 1; day <= daysInMonth; day++) {
-            const dayStr = String(day).padStart(2, '0');
-            const checkbox = document.getElementById(`day-${dayStr}`);
+        daysInPeriod.forEach((isoDate) => {
+            const checkbox = document.getElementById(`day-${isoDate}`);
             if (checkbox && checkbox.checked) {
-                selectedDays.push(dayStr);
+                selectedDays.push(isoDate);
             }
-        }
+        });
         
         dayOffs[key] = selectedDays;
         saveDayOffs();
@@ -182,29 +260,12 @@ function openDayOffsModal() {
     });
 }
 
-// Inicializar filtros com lógica de pré-seleção
+// Inicializar filtros com período padrão (ciclo 21 a 20)
 function initializeFilters() {
-    const today = new Date();
-    const currentDay = today.getDate();
-    const currentMonth = today.getMonth() + 1; // 0-indexed
-    const currentYear = today.getFullYear();
-    
-    // Se dia está entre 1 e 10, seleciona mês anterior
-    let selectedMonth;
-    let selectedYear = currentYear;
-    
-    if (currentDay <= 10) {
-        selectedMonth = currentMonth - 1;
-        if (selectedMonth === 0) {
-            selectedMonth = 12;
-            selectedYear = currentYear - 1;
-        }
-    } else {
-        selectedMonth = currentMonth;
+    const { start, end } = getDefaultPeriod();
+    if (periodPicker) {
+        periodPicker.setDate([start, end], false);
     }
-    
-    document.getElementById('monthSelect').value = selectedMonth;
-    document.getElementById('yearSelect').value = selectedYear;
 }
 
 // Manipular seleção de arquivo
@@ -257,17 +318,15 @@ function processData() {
 
 // Aplicar filtros
 function applyFilters() {
-    const selectedMonth = parseInt(document.getElementById('monthSelect').value);
-    const selectedYear = parseInt(document.getElementById('yearSelect').value);
-    
-    // Filtrar dados pelo mês e ano
+    const { start, end } = getSelectedPeriod();
+
     filteredData = csvData.filter(row => {
         if (!row.Prazoss || !row['Completed Work']) return false;
-        
+
         const date = parseDate(row.Prazoss);
         if (!date) return false;
-        
-        return date.getMonth() + 1 === selectedMonth && date.getFullYear() === selectedYear;
+
+        return isDateInPeriod(date, start, end);
     });
     
     // Atualizar visualizações
@@ -328,67 +387,46 @@ function updateStats() {
     document.getElementById('totalActivities').textContent = activities.size;
 }
 
-// Calcular dias úteis do mês (excluindo sábados, domingos e day offs)
-function calculateWorkingDays(month, year) {
-    const daysInMonth = new Date(year, month, 0).getDate();
+// Calcular dias úteis do período (excluindo sábados, domingos e day offs)
+function calculateWorkingDays(start, end) {
     let workingDays = 0;
-    
-    for (let day = 1; day <= daysInMonth; day++) {
-        const date = new Date(year, month - 1, day);
+
+    eachDayInPeriod(start, end, (date) => {
         const dayOfWeek = date.getDay();
-        const dayOff = isDayOff(date, month, year);
-        
-        // Não é fim de semana nem day off
-        if (dayOfWeek !== 0 && dayOfWeek !== 6 && !dayOff) {
+        if (dayOfWeek !== 0 && dayOfWeek !== 6 && !isDayOff(date)) {
             workingDays++;
         }
-    }
-    
+    });
+
     return workingDays;
 }
 
-// Calcular dias úteis decorridos até hoje (ou até o fim do mês se estamos no futuro)
-function calculateElapsedWorkingDays(month, year) {
-    const today = new Date();
-    const currentMonth = today.getMonth() + 1;
-    const currentYear = today.getFullYear();
-    const currentDay = today.getDate();
-    
-    const daysInMonth = new Date(year, month, 0).getDate();
-    let lastDay;
-    
-    // Se estamos vendo um mês no passado, contar todos os dias úteis
-    if (year < currentYear || (year === currentYear && month < currentMonth)) {
-        lastDay = daysInMonth;
-    }
-    // Se estamos no mês atual, contar até hoje
-    else if (year === currentYear && month === currentMonth) {
-        lastDay = currentDay;
-    }
-    // Se estamos vendo um mês no futuro, retornar 0
-    else {
+// Calcular dias úteis decorridos até hoje (ou até o fim do período)
+function calculateElapsedWorkingDays(start, end) {
+    const today = normalizeDate(new Date());
+    const periodStart = normalizeDate(start);
+    const periodEnd = normalizeDate(end);
+
+    if (today < periodStart) {
         return 0;
     }
-    
+
+    const lastDate = today <= periodEnd ? today : periodEnd;
     let workingDays = 0;
-    for (let day = 1; day <= lastDay; day++) {
-        const date = new Date(year, month - 1, day);
+
+    eachDayInPeriod(periodStart, lastDate, (date) => {
         const dayOfWeek = date.getDay();
-        const dayOff = isDayOff(date, month, year);
-        
-        // Não é fim de semana nem day off
-        if (dayOfWeek !== 0 && dayOfWeek !== 6 && !dayOff) {
+        if (dayOfWeek !== 0 && dayOfWeek !== 6 && !isDayOff(date)) {
             workingDays++;
         }
-    }
-    
+    });
+
     return workingDays;
 }
 
 // Atualizar saúde do lançamento
 function updateHealth() {
-    const selectedMonth = parseInt(document.getElementById('monthSelect').value);
-    const selectedYear = parseInt(document.getElementById('yearSelect').value);
+    const { start, end } = getSelectedPeriod();
     
     // Calcular horas totais lançadas
     let totalHours = 0;
@@ -400,8 +438,8 @@ function updateHealth() {
     });
     
     // Calcular dias úteis
-    const totalWorkingDays = calculateWorkingDays(selectedMonth, selectedYear);
-    const elapsedWorkingDays = calculateElapsedWorkingDays(selectedMonth, selectedYear);
+    const totalWorkingDays = calculateWorkingDays(start, end);
+    const elapsedWorkingDays = calculateElapsedWorkingDays(start, end);
     
     // Meta de 8 horas por dia útil
     const targetHours = totalWorkingDays * 8;
@@ -439,7 +477,7 @@ function updateHealth() {
         healthStatus = 'Completo';
         healthColor = 'bg-success';
         progressBarColor = '#198754';
-        healthDescription = '🎉 Meta do mês atingida!';
+        healthDescription = '🎉 Meta do período atingida!';
     } else if (percentage >= expectedPercentage - 10) {
         healthStatus = 'Saudável';
         healthColor = 'bg-success';
@@ -473,32 +511,26 @@ function updateHealth() {
     document.getElementById('progressDescription').textContent = healthDescription;
 }
 
-// Agrupar dados por dia (incluindo todos os dias do mês)
+// Agrupar dados por dia (todos os dias do período)
 function groupByDay() {
-    const selectedMonth = parseInt(document.getElementById('monthSelect').value);
-    const selectedYear = parseInt(document.getElementById('yearSelect').value);
-    
-    // Criar objeto com todos os dias do mês
+    const { start, end } = getSelectedPeriod();
     const grouped = {};
-    const daysInMonth = new Date(selectedYear, selectedMonth, 0).getDate();
-    
-    // Inicializar todos os dias do mês
-    for (let day = 1; day <= daysInMonth; day++) {
-        const date = new Date(selectedYear, selectedMonth - 1, day);
+    const dayNames = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+
+    eachDayInPeriod(start, end, (date) => {
         const dateKey = formatDate(date);
-        const dayOfWeek = date.getDay(); // 0 = Domingo, 6 = Sábado
-        const dayNames = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
-        const dayOff = isDayOff(date, selectedMonth, selectedYear);
-        
-        grouped[dateKey] = { 
-            hours: 0, 
+        const dayOfWeek = date.getDay();
+        const dayOff = isDayOff(date);
+
+        grouped[dateKey] = {
+            hours: 0,
             tasks: 0,
             dayOfWeek: dayNames[dayOfWeek],
             isWeekend: dayOfWeek === 0 || dayOfWeek === 6,
             isDayOff: dayOff,
             date: date
         };
-    }
+    });
     
     // Adicionar dados reais do CSV
     filteredData.forEach(row => {
@@ -593,6 +625,8 @@ function updateTables() {
 // Atualizar tabela diária
 function updateDailyTable() {
     const dailyData = groupByDay();
+    const { start, end } = getSelectedPeriod();
+    const periodDays = Math.round((end - start) / (1000 * 60 * 60 * 24)) + 1;
     
     // Converter para array e ordenar
     const dataArray = Object.entries(dailyData).map(([date, data]) => ({
@@ -705,7 +739,7 @@ function updateDailyTable() {
         language: {
             url: '//cdn.datatables.net/plug-ins/1.13.7/i18n/pt-BR.json'
         },
-        pageLength: 31
+        pageLength: Math.max(periodDays, 10)
     });
 }
 
@@ -803,8 +837,7 @@ function updateActivityTable() {
 
 // Gerar texto dos projetos para copiar
 function generateProjectsText() {
-    const selectedMonth = parseInt(document.getElementById('monthSelect').value);
-    const selectedYear = parseInt(document.getElementById('yearSelect').value);
+    const { start, end } = getSelectedPeriod();
 
     // Obter projetos únicos do filteredData, sem repetição
     const projects = new Set();
@@ -817,13 +850,7 @@ function generateProjectsText() {
     // Converter para array e ordenar
     const projectsArray = Array.from(projects).sort();
 
-    // Formatando período
-    const daysInMonth = new Date(selectedYear, selectedMonth, 0).getDate();
-    const startDay = String(1).padStart(2, '0');
-    const endDay = String(daysInMonth).padStart(2, '0');
-    const monthStr = String(selectedMonth).padStart(2, '0');
-
-    const periodText = `${startDay}/${monthStr}/${selectedYear} à ${endDay}/${monthStr}/${selectedYear}`;
+    const periodText = `${formatDate(start)} à ${formatDate(end)}`;
 
     // Montar texto final
     let text = 'Projeto:\n';

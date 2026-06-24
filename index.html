@@ -3,10 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard de Produção Mensal</title>
+    <title>Dashboard de Produção por Período</title>
     
     <!-- Bootstrap 5 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Flatpickr -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
     <!-- Bootstrap Icons -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
     <!-- DataTables Bootstrap 5 -->
@@ -49,13 +51,20 @@
             font-size: 0.85rem;
             padding: 0.35em 0.65em;
         }
+        #periodRange {
+            background-color: white;
+            cursor: pointer;
+        }
+        .flatpickr-calendar {
+            box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+        }
     </style>
 </head>
 <body>
     <nav class="navbar navbar-dark bg-primary mb-4">
         <div class="container-fluid">
             <span class="navbar-brand mb-0 h1">
-                <i class="bi bi-graph-up-arrow"></i> Dashboard de Produção Mensal
+                <i class="bi bi-graph-up-arrow"></i> Dashboard de Produção por Período
             </span>
         </div>
     </nav>
@@ -79,32 +88,14 @@
 
         <!-- Filters -->
         <div class="row mb-4" id="filtersSection" style="display: none;">
-            <div class="col-md-6 col-lg-3">
-                <label class="form-label fw-bold">
-                    <i class="bi bi-calendar-month"></i> Mês
+            <div class="col-md-6 col-lg-5">
+                <label class="form-label fw-bold" for="periodRange">
+                    <i class="bi bi-calendar-range"></i> Período de Referência
                 </label>
-                <select class="form-select" id="monthSelect">
-                    <option value="1">Janeiro</option>
-                    <option value="2">Fevereiro</option>
-                    <option value="3">Março</option>
-                    <option value="4">Abril</option>
-                    <option value="5">Maio</option>
-                    <option value="6">Junho</option>
-                    <option value="7">Julho</option>
-                    <option value="8">Agosto</option>
-                    <option value="9">Setembro</option>
-                    <option value="10">Outubro</option>
-                    <option value="11">Novembro</option>
-                    <option value="12">Dezembro</option>
-                </select>
+                <input type="text" class="form-control" id="periodRange" placeholder="Selecione o intervalo de datas" readonly>
+                <small class="text-muted">Ex.: 21/05/2026 a 20/06/2026 — padrão ciclo 21 a 20</small>
             </div>
-            <div class="col-md-6 col-lg-3">
-                <label class="form-label fw-bold">
-                    <i class="bi bi-calendar-year"></i> Ano
-                </label>
-                <input type="number" class="form-control" id="yearSelect" min="2020" max="2030">
-            </div>
-            <div class="col-md-12 col-lg-6 d-flex align-items-end">
+            <div class="col-md-12 col-lg-7 d-flex align-items-end">
                 <button class="btn btn-success me-2" id="applyFiltersBtn">
                     <i class="bi bi-funnel-fill"></i> Aplicar Filtros
                 </button>
@@ -194,7 +185,7 @@
                         <div class="row">
                             <div class="col-md-3">
                                 <div class="text-center mb-3">
-                                    <p class="text-muted mb-2">Meta do Mês</p>
+                                    <p class="text-muted mb-2">Meta do Período</p>
                                     <h4 class="mb-0" id="targetHours">0h</h4>
                                     <small class="text-muted" id="workingDays">0 dias úteis</small>
                                 </div>
@@ -210,7 +201,7 @@
                                 <div class="text-center mb-3">
                                     <p class="text-muted mb-2" id="remainingLabel">Faltam</p>
                                     <h4 class="mb-0" id="remainingHours">0h</h4>
-                                    <small class="text-muted">para completar o mês</small>
+                                    <small class="text-muted">para completar o período</small>
                                 </div>
                             </div>
                             <div class="col-md-3">
@@ -325,6 +316,9 @@
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     <!-- Bootstrap 5 JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Flatpickr -->
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/pt.js"></script>
     <!-- PapaParse -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
     <!-- DataTables -->
